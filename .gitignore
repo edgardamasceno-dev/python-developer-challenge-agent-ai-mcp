@@ -1,1 +1,23 @@
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.log
+*.sqlite3
+*.db
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Arquivos temporários de editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
