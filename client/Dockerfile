@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY . /app
 
-# Instale dependências essenciais (ajuste requirements.txt depois)
-RUN pip install --no-cache-dir rich prompt_toolkit
-
+# Instala todas as dependências do requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 CMD ["python", "main.py"] 
