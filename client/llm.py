@@ -2,12 +2,14 @@
 Abstração para integração com LLMs (OpenAI, Gemini, Deepseek).
 """
 import os
+import openai
 
 class LanguageModelService:
     """Interface para provedores de LLM."""
     def __init__(self, provider: str):
         self.provider = provider
         self.api_key = os.getenv("LLM_API_KEY")
+        self.model = os.getenv("LLM_MODEL", "gpt-4o")
         # Inicialização específica do provider
 
     def chat(self, messages, **kwargs):
@@ -17,10 +19,26 @@ class LanguageModelService:
 class OpenAIService(LanguageModelService):
     def __init__(self):
         super().__init__('OPENAI')
-        # TODO: inicializar cliente OpenAI usando self.api_key
+        self.client = openai.OpenAI(api_key=self.api_key)
     def chat(self, messages, **kwargs):
-        # TODO: implementar chamada OpenAI
-        pass
+        # Converte mensagens para o formato OpenAI
+        openai_msgs = []
+        for m in messages:
+            role = m.get("role")
+            if role == "tool":
+                openai_msgs.append({"role": "system", "content": f"Tool {m.get('name')}: {m.get('content')}"})
+            else:
+                openai_msgs.append({"role": role, "content": m.get("content")})
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=openai_msgs,
+                temperature=0.2,
+                max_tokens=1024,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            return f"[LLM Error: {e}]"
 
 class GeminiService(LanguageModelService):
     def __init__(self):

@@ -147,6 +147,44 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de resultado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
             else:
                 return JSONResponse(content=JSONRPCResponse(error=JSONRPCError(code=-32602, message="Unknown prompt name"), id=req.id).dict(exclude_none=True))
+        # Suporte ao método tools/call (MCP padrão)
+        if req.method == "tools/call":
+            name = req.params.get("name") if req.params else None
+            arguments = req.params.get("arguments") if req.params else {}
+            if name not in MCP_METHODS:
+                return JSONResponse(
+                    status_code=400,
+                    content=JSONRPCResponse(
+                        error=JSONRPCError(code=-32601, message=f"Tool not found: {name}"),
+                        id=req.id
+                    ).dict(exclude_none=True)
+                )
+            # Chama a tool correspondente
+            if name == "buscar_veiculos":
+                filters = VehicleFilter(**arguments)
+                result = await MCP_METHODS[name](db, filters)
+                return JSONResponse(content=JSONRPCResponse(result=[r.dict() for r in result], id=req.id).dict(exclude_none=True))
+            elif name == "listar_marcas":
+                result = await MCP_METHODS[name](db)
+                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+            elif name == "listar_modelos":
+                brands = arguments.get("brands")
+                result = await MCP_METHODS[name](db, brands)
+                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+            elif name == "obter_range_anos":
+                result = await MCP_METHODS[name](db)
+                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+            elif name == "obter_range_precos":
+                result = await MCP_METHODS[name](db)
+                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+            else:
+                return JSONResponse(
+                    status_code=400,
+                    content=JSONRPCResponse(
+                        error=JSONRPCError(code=-32601, message=f"Tool not found: {name}"),
+                        id=req.id
+                    ).dict(exclude_none=True)
+                )
         if req.method not in MCP_METHODS:
             return JSONResponse(
                 status_code=400,
