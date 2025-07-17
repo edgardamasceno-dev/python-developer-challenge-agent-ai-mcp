@@ -198,6 +198,53 @@ async def call_tool_with_retries(mcp_client, name, input_args, max_retries=3):
             await asyncio.sleep(0.5)
     return None, last_error
 
+async def show_intro_prompt(mcp_client):
+    resp = await mcp_client.get_prompt("search_intro")
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_filters_summary_prompt(mcp_client, filters):
+    resp = await mcp_client.get_prompt("filters_summary", {"filters": filters})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_search_result_summary_prompt(mcp_client, vehicle_count, min_price=None, max_price=None, min_km=None, max_km=None):
+    args = {"vehicle_count": vehicle_count}
+    if min_price is not None: args["min_price"] = min_price
+    if max_price is not None: args["max_price"] = max_price
+    if min_km is not None: args["min_km"] = min_km
+    if max_km is not None: args["max_km"] = max_km
+    resp = await mcp_client.get_prompt("search_result_summary", args)
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_no_results_prompt(mcp_client, filters):
+    resp = await mcp_client.get_prompt("no_results", {"filters": filters})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_vehicle_details_prompt(mcp_client, vehicle):
+    resp = await mcp_client.get_prompt("vehicle_details", {"vehicle": vehicle})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_suggest_more_filters_prompt(mcp_client, suggested_filters):
+    resp = await mcp_client.get_prompt("suggest_more_filters", {"suggested_filters": suggested_filters})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_action_confirmation_prompt(mcp_client, action):
+    resp = await mcp_client.get_prompt("action_confirmation", {"action": action})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
 async def main_async():
     global last_vehicle_list
     print_status("MCP client CLI is running")

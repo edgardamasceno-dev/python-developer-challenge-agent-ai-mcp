@@ -33,6 +33,31 @@ class MCPClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def list_prompts(self):
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "prompts/list",
+            "params": {},
+            "id": 3
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(self.server_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get('result', {}).get('prompts', [])
+
+    async def get_prompt(self, name: str, arguments: dict = None, id: int = 4):
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "prompts/get",
+            "params": {"name": name, "arguments": arguments or {}},
+            "id": id
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(self.server_url, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+
 def get_mcp_clients():
     servers = os.getenv('MCP_SERVERS', '').splitlines()
     return [MCPClient(url.split(',')[1].strip()) for url in servers if ',' in url] 
