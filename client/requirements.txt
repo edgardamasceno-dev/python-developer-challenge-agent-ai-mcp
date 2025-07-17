@@ -1,0 +1,6 @@
+rich
+prompt_toolkit
+httpx
+openai
+google-generativeai
+python-dotenv 
