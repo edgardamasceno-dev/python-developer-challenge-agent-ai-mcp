@@ -36,8 +36,9 @@ The architecture follows a decoupled microservices pattern, with standardized co
 *   **Schema DDL (`/docker/postgres/init/01-init-schema.sql`):**
     ```sql
     CREATE EXTENSION IF NOT EXISTS unaccent;
+
     CREATE TABLE IF NOT EXISTS veiculo (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid_v7(),
+        id UUID PRIMARY KEY DEFAULT uuidv7(),
         marca VARCHAR(100) NOT NULL,
         modelo VARCHAR(100) NOT NULL,
         ano_fabricacao INT NOT NULL,
@@ -50,11 +51,20 @@ The architecture follows a decoupled microservices pattern, with standardized co
         tipo_transmissao VARCHAR(50) NOT NULL,
         preco NUMERIC(10, 2) NOT NULL CHECK (preco > 0),
         data_criacao TIMESTAMPTZ NOT NULL DEFAULT (now() at time zone 'utc'),
-        ts_search TSVECTOR GENERATED ALWAYS AS (
-            to_tsvector('portuguese', unaccent(marca) || ' ' || unaccent(modelo) || ' ' || unaccent(cor) || ' ' || unaccent(tipo_combustivel))
-        ) STORED,
+        ts_search TSVECTOR,
         CONSTRAINT ano_valido CHECK (ano_fabricacao >= 1990 AND ano_modelo >= ano_fabricacao AND ano_modelo <= EXTRACT(YEAR FROM now()) + 1)
     );
+
+    CREATE OR REPLACE FUNCTION veiculo_tsvector_trigger() RETURNS trigger AS $$
+    BEGIN
+      NEW.ts_search := to_tsvector('portuguese', unaccent(NEW.marca) || ' ' || unaccent(NEW.modelo) || ' ' || unaccent(NEW.cor) || ' ' || unaccent(NEW.tipo_combustivel));
+      RETURN NEW;
+    END
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER tsvectorupdate BEFORE INSERT OR UPDATE
+        ON veiculo FOR EACH ROW EXECUTE FUNCTION veiculo_tsvector_trigger();
+
     CREATE INDEX IF NOT EXISTS idx_veiculo_marca_modelo ON veiculo (marca, modelo);
     CREATE INDEX IF NOT EXISTS idx_veiculo_ano_fabricacao ON veiculo (ano_fabricacao DESC);
     CREATE INDEX IF NOT EXISTS idx_veiculo_preco ON veiculo (preco);
@@ -84,7 +94,7 @@ The architecture follows a decoupled microservices pattern, with standardized co
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_FILE = OUTPUT_DIR / "02-populate-data.sql"
 
-    # Realistic data for the Brazilian market
+    # Dados realistas do mercado brasileiro
     brands_models = {
         'Ford': ['Ka', 'Fiesta', 'Focus', 'EcoSport', 'Ranger'], 'Chevrolet': ['Onix', 'Prisma', 'Cruze', 'S10', 'Tracker'],
         'Volkswagen': ['Gol', 'Polo', 'Virtus', 'T-Cross', 'Nivus', 'Saveiro'], 'Toyota': ['Corolla', 'Hilux', 'Yaris', 'RAV4'],
@@ -92,9 +102,9 @@ The architecture follows a decoupled microservices pattern, with standardized co
         'Hyundai': ['HB20', 'Creta', 'HB20S'], 'Jeep': ['Renegade', 'Compass', 'Commander'],
         'Renault': ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur']
     }
-    fuel_types = ['Flex', 'Gasoline', 'Diesel', 'Ethanol', 'Hybrid']
-    transmission_types = ['Manual', 'Automatic', 'CVT', 'Automated']
-    popular_colors = ['Black', 'White', 'Silver', 'Gray', 'Red', 'Blue']
+    fuel_types = ['Flex', 'Gasolina', 'Diesel', 'Etanol', 'Híbrido']
+    transmission_types = ['Manual', 'Automática', 'CVT', 'Automatizada']
+    popular_colors = ['Preto', 'Branco', 'Prata', 'Cinza', 'Vermelho', 'Azul']
     doors = [2, 4]
     engine_sizes = [1.0, 1.3, 1.4, 1.5, 1.6, 1.8, 2.0]
 
@@ -109,7 +119,7 @@ The architecture follows a decoupled microservices pattern, with standardized co
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write("INSERT INTO veiculo (marca, modelo, ano_fabricacao, ano_modelo, motorizacao, tipo_combustivel, cor, quilometragem, numero_portas, tipo_transmissao, preco) VALUES\n")
         values = []
-        for _ in track(range(NUM_VEHICLES), description="Generating vehicle data..."):
+        for _ in track(range(NUM_VEHICLES), description="Gerando dados de veículos..."):
             brand = random.choice(list(brands_models.keys()))
             model = random.choice(brands_models[brand])
             year_manufacture = random.randint(2010, CURRENT_YEAR - 1)
@@ -311,8 +321,9 @@ A arquitetura segue um padrão de microsserviços desacoplados, com comunicaçã
 *   **Schema DDL (`/docker/postgres/init/01-init-schema.sql`):**
     ```sql
     CREATE EXTENSION IF NOT EXISTS unaccent;
+
     CREATE TABLE IF NOT EXISTS veiculo (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid_v7(),
+        id UUID PRIMARY KEY DEFAULT uuidv7(),
         marca VARCHAR(100) NOT NULL,
         modelo VARCHAR(100) NOT NULL,
         ano_fabricacao INT NOT NULL,
@@ -325,11 +336,20 @@ A arquitetura segue um padrão de microsserviços desacoplados, com comunicaçã
         tipo_transmissao VARCHAR(50) NOT NULL,
         preco NUMERIC(10, 2) NOT NULL CHECK (preco > 0),
         data_criacao TIMESTAMPTZ NOT NULL DEFAULT (now() at time zone 'utc'),
-        ts_search TSVECTOR GENERATED ALWAYS AS (
-            to_tsvector('portuguese', unaccent(marca) || ' ' || unaccent(modelo) || ' ' || unaccent(cor) || ' ' || unaccent(tipo_combustivel))
-        ) STORED,
+        ts_search TSVECTOR,
         CONSTRAINT ano_valido CHECK (ano_fabricacao >= 1990 AND ano_modelo >= ano_fabricacao AND ano_modelo <= EXTRACT(YEAR FROM now()) + 1)
     );
+
+    CREATE OR REPLACE FUNCTION veiculo_tsvector_trigger() RETURNS trigger AS $$
+    BEGIN
+      NEW.ts_search := to_tsvector('portuguese', unaccent(NEW.marca) || ' ' || unaccent(NEW.modelo) || ' ' || unaccent(NEW.cor) || ' ' || unaccent(NEW.tipo_combustivel));
+      RETURN NEW;
+    END
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER tsvectorupdate BEFORE INSERT OR UPDATE
+        ON veiculo FOR EACH ROW EXECUTE FUNCTION veiculo_tsvector_trigger();
+
     CREATE INDEX IF NOT EXISTS idx_veiculo_marca_modelo ON veiculo (marca, modelo);
     CREATE INDEX IF NOT EXISTS idx_veiculo_ano_fabricacao ON veiculo (ano_fabricacao DESC);
     CREATE INDEX IF NOT EXISTS idx_veiculo_preco ON veiculo (preco);
@@ -360,42 +380,42 @@ A arquitetura segue um padrão de microsserviços desacoplados, com comunicaçã
     OUTPUT_FILE = OUTPUT_DIR / "02-populate-data.sql"
 
     # Dados realistas do mercado brasileiro
-    marcas_modelos = {
+    brands_models = {
         'Ford': ['Ka', 'Fiesta', 'Focus', 'EcoSport', 'Ranger'], 'Chevrolet': ['Onix', 'Prisma', 'Cruze', 'S10', 'Tracker'],
         'Volkswagen': ['Gol', 'Polo', 'Virtus', 'T-Cross', 'Nivus', 'Saveiro'], 'Toyota': ['Corolla', 'Hilux', 'Yaris', 'RAV4'],
         'Honda': ['Civic', 'Fit', 'HR-V', 'WR-V', 'City'], 'Fiat': ['Mobi', 'Argo', 'Toro', 'Strada', 'Pulse'],
         'Hyundai': ['HB20', 'Creta', 'HB20S'], 'Jeep': ['Renegade', 'Compass', 'Commander'],
         'Renault': ['Kwid', 'Sandero', 'Logan', 'Duster', 'Captur']
     }
-    tipos_combustivel = ['Flex', 'Gasolina', 'Diesel', 'Etanol', 'Híbrido']
-    tipos_transmissao = ['Manual', 'Automática', 'CVT', 'Automatizada']
-    cores_populares = ['Preto', 'Branco', 'Prata', 'Cinza', 'Vermelho', 'Azul']
-    portas = [2, 4]
-    motorizacoes = [1.0, 1.3, 1.4, 1.5, 1.6, 1.8, 2.0]
+    fuel_types = ['Flex', 'Gasolina', 'Diesel', 'Etanol', 'Híbrido']
+    transmission_types = ['Manual', 'Automática', 'CVT', 'Automatizada']
+    popular_colors = ['Preto', 'Branco', 'Prata', 'Cinza', 'Vermelho', 'Azul']
+    doors = [2, 4]
+    engine_sizes = [1.0, 1.3, 1.4, 1.5, 1.6, 1.8, 2.0]
 
-    def gerar_preco_e_km(ano):
-        idade = CURRENT_YEAR - ano
-        preco_base = 120000 * math.exp(-idade * 0.15)
-        preco_final = random.uniform(preco_base * 0.8, preco_base * 1.2)
-        km_base = idade * 15000
-        km_final = max(0, random.uniform(km_base * 0.7, km_base * 1.3))
-        return round(preco_final, 2), int(km_final)
+    def generate_price_and_km(year):
+        age = CURRENT_YEAR - year
+        base_price = 120000 * math.exp(-age * 0.15)
+        final_price = random.uniform(base_price * 0.8, base_price * 1.2)
+        base_km = age * 15000
+        final_km = max(0, random.uniform(base_km * 0.7, base_km * 1.3))
+        return round(final_price, 2), int(final_km)
 
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write("INSERT INTO veiculo (marca, modelo, ano_fabricacao, ano_modelo, motorizacao, tipo_combustivel, cor, quilometragem, numero_portas, tipo_transmissao, preco) VALUES\n")
         values = []
         for _ in track(range(NUM_VEICULOS), description="Gerando dados de veículos..."):
-            marca = random.choice(list(marcas_modelos.keys()))
-            modelo = random.choice(marcas_modelos[marca])
-            ano_fabricacao = random.randint(2010, CURRENT_YEAR - 1)
-            ano_modelo = random.choice([ano_fabricacao, ano_fabricacao + 1])
-            preco, km = gerar_preco_e_km(ano_fabricacao)
+            brand = random.choice(list(brands_models.keys()))
+            model = random.choice(brands_models[brand])
+            year_manufacture = random.randint(2010, CURRENT_YEAR - 1)
+            year_model = random.choice([year_manufacture, year_manufacture + 1])
+            price, km = generate_price_and_km(year_manufacture)
 
             values.append(
-                f"('{marca}', '{modelo}', {ano_fabricacao}, {ano_modelo}, "
-                f"{random.choice(motorizacoes)}, '{random.choice(tipos_combustivel)}', "
-                f"'{random.choice(cores_populares)}', {km}, {random.choice(portas)}, "
-                f"'{random.choice(tipos_transmissao)}', {preco})"
+                f"('{brand}', '{model}', {year_manufacture}, {year_model}, "
+                f"{random.choice(engine_sizes)}, '{random.choice(fuel_types)}', "
+                f"'{random.choice(popular_colors)}', {km}, {random.choice(doors)}, "
+                f"'{random.choice(transmission_types)}', {price})"
             )
         f.write(',\n'.join(values) + ';\n')
 
