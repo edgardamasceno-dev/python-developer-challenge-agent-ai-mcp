@@ -245,6 +245,42 @@ async def show_action_confirmation_prompt(mcp_client, action):
     if messages:
         print(messages[0]['content'])
 
+async def show_colors_list_prompt(mcp_client, colors):
+    resp = await mcp_client.get_prompt("colors_list", {"colors": colors})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_colors_no_results_prompt(mcp_client):
+    resp = await mcp_client.get_prompt("colors_no_results")
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_brands_list_prompt(mcp_client, brands):
+    resp = await mcp_client.get_prompt("brands_list", {"brands": brands})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_brands_no_results_prompt(mcp_client):
+    resp = await mcp_client.get_prompt("brands_no_results")
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_models_list_prompt(mcp_client, models):
+    resp = await mcp_client.get_prompt("models_list", {"models": models})
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
+async def show_models_no_results_prompt(mcp_client):
+    resp = await mcp_client.get_prompt("models_no_results")
+    messages = resp.get('result', {}).get('messages', [])
+    if messages:
+        print(messages[0]['content'])
+
 async def main_async():
     global last_vehicle_list
     print_status("MCP client CLI is running")
