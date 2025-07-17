@@ -58,6 +58,15 @@ MCP_METHODS = {
     "obter_range_km": obter_range_km,
 }
 
+# Sugestões de textos para cada prompt MCP:
+# search_intro: "Vamos encontrar o carro ideal para você. Quais características você procura?"
+# filters_summary: "Buscando veículos com os seguintes filtros: {filters}"
+# search_result_summary: "Foram encontrados {vehicle_count} veículos. Preço: R$ {min_price} a R$ {max_price}. Quilometragem: {min_km} a {max_km} km."
+# no_results: "Nenhum veículo encontrado com os filtros informados: {filters}. Tente ajustar os critérios."
+# vehicle_details: "{vehicle['brand']} {vehicle['model']} {vehicle['year_manufacture']}, {vehicle['transmission']}, {vehicle['km']} km, R$ {vehicle['price']}, cor {vehicle['color']}"
+# suggest_more_filters: "Sua busca retornou muitos veículos. Que tal filtrar por ano, preço ou cor?"
+# action_confirmation: "Filtro aplicado: {action}"
+
 @app.post("/mcp")
 async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
     try:
@@ -127,19 +136,54 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
         if req.method == "prompts/list":
             prompts = [
                 {
-                    "name": "car_search_intro",
-                    "description": "Prompt de introdução para busca de veículos.",
+                    "name": "search_intro",
+                    "description": "Mensagem de introdução para iniciar a busca de veículos.",
+                    "arguments": []
+                },
+                {
+                    "name": "filters_summary",
+                    "description": "Resumo dos filtros aplicados na busca.",
                     "arguments": [
-                        {"name": "user_name", "description": "Nome do usuário", "required": False}
+                        {"name": "filters", "description": "Dicionário dos filtros aplicados", "required": True}
                     ]
                 },
                 {
-                    "name": "car_search_result",
-                    "description": "Prompt para exibir resultados de busca de veículos.",
+                    "name": "search_result_summary",
+                    "description": "Resumo dos resultados encontrados na busca.",
                     "arguments": [
                         {"name": "vehicle_count", "description": "Quantidade de veículos encontrados", "required": True},
-                        {"name": "min_km", "description": "Quilometragem mínima disponível", "required": False},
-                        {"name": "max_km", "description": "Quilometragem máxima disponível", "required": False}
+                        {"name": "min_price", "description": "Preço mínimo", "required": False},
+                        {"name": "max_price", "description": "Preço máximo", "required": False},
+                        {"name": "min_km", "description": "Quilometragem mínima", "required": False},
+                        {"name": "max_km", "description": "Quilometragem máxima", "required": False}
+                    ]
+                },
+                {
+                    "name": "no_results",
+                    "description": "Mensagem exibida quando nenhum veículo é encontrado.",
+                    "arguments": [
+                        {"name": "filters", "description": "Dicionário dos filtros aplicados", "required": False}
+                    ]
+                },
+                {
+                    "name": "vehicle_details",
+                    "description": "Mensagem para detalhar um veículo específico.",
+                    "arguments": [
+                        {"name": "vehicle", "description": "Dicionário com os dados do veículo", "required": True}
+                    ]
+                },
+                {
+                    "name": "suggest_more_filters",
+                    "description": "Sugere ao usuário adicionar mais filtros para refinar a busca.",
+                    "arguments": [
+                        {"name": "suggested_filters", "description": "Lista de filtros sugeridos", "required": False}
+                    ]
+                },
+                {
+                    "name": "action_confirmation",
+                    "description": "Mensagem de confirmação após uma ação do usuário.",
+                    "arguments": [
+                        {"name": "action", "description": "Ação realizada", "required": True}
                     ]
                 }
             ]
