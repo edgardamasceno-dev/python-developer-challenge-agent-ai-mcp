@@ -185,7 +185,43 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                     "arguments": [
                         {"name": "action", "description": "Ação realizada", "required": True}
                     ]
-                }
+                },
+                {
+                    "name": "colors_list",
+                    "description": "Mensagem para listar as cores disponíveis.",
+                    "arguments": [
+                        {"name": "colors", "description": "Lista de cores disponíveis", "required": True}
+                    ]
+                },
+                {
+                    "name": "colors_no_results",
+                    "description": "Mensagem exibida quando não há cores disponíveis.",
+                    "arguments": []
+                },
+                {
+                    "name": "brands_list",
+                    "description": "Mensagem para listar as marcas disponíveis.",
+                    "arguments": [
+                        {"name": "brands", "description": "Lista de marcas disponíveis", "required": True}
+                    ]
+                },
+                {
+                    "name": "brands_no_results",
+                    "description": "Mensagem exibida quando não há marcas disponíveis.",
+                    "arguments": []
+                },
+                {
+                    "name": "models_list",
+                    "description": "Mensagem para listar os modelos disponíveis.",
+                    "arguments": [
+                        {"name": "models", "description": "Lista de modelos disponíveis", "required": True}
+                    ]
+                },
+                {
+                    "name": "models_no_results",
+                    "description": "Mensagem exibida quando não há modelos disponíveis.",
+                    "arguments": []
+                },
             ]
             return JSONResponse(content=JSONRPCResponse(result={"prompts": prompts, "nextCursor": None}, id=req.id).dict(exclude_none=True))
         if req.method == "prompts/get":
@@ -224,6 +260,27 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 action = arguments.get("action", "")
                 prompt_text = f"Filtro aplicado: {action}"
                 return JSONResponse(content=JSONRPCResponse(result={"description": "Confirmação de ação", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "colors_list":
+                colors = arguments.get("colors", [])
+                prompt_text = f"Cores disponíveis: {', '.join(colors)}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Lista de cores", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "colors_no_results":
+                prompt_text = "Não há cores disponíveis no momento."
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Nenhum resultado encontrado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "brands_list":
+                brands = arguments.get("brands", [])
+                prompt_text = f"Marcas disponíveis: {', '.join(brands)}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Lista de marcas", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "brands_no_results":
+                prompt_text = "Não há marcas disponíveis no momento."
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Nenhum resultado encontrado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "models_list":
+                models = arguments.get("models", [])
+                prompt_text = f"Modelos disponíveis: {', '.join(models)}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Lista de modelos", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "models_no_results":
+                prompt_text = "Não há modelos disponíveis no momento."
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Nenhum resultado encontrado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
             else:
                 return JSONResponse(content=JSONRPCResponse(error=JSONRPCError(code=-32602, message="Unknown prompt name"), id=req.id).dict(exclude_none=True))
         if req.method == "tools/call":
