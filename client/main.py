@@ -352,6 +352,26 @@ async def main_async():
                 tool_result, tool_error = await call_tool_with_retries(mcp_client, tool_call['name'], tool_call.get('input', {}))
                 
                 if tool_result is not None:
+                    # INTEGRAÇÃO DE PROMPTS DINÂMICOS PARA MARCAS, MODELOS E CORES
+                    if tool_call['name'] == 'listar_marcas':
+                        brands = tool_result['brands'] if isinstance(tool_result, dict) and 'brands' in tool_result else tool_result
+                        if brands:
+                            await show_brands_list_prompt(mcp_client, brands)
+                        else:
+                            await show_brands_no_results_prompt(mcp_client)
+                    elif tool_call['name'] == 'listar_modelos':
+                        models = tool_result['models'] if isinstance(tool_result, dict) and 'models' in tool_result else tool_result
+                        if models:
+                            await show_models_list_prompt(mcp_client, models)
+                        else:
+                            await show_models_no_results_prompt(mcp_client)
+                    elif tool_call['name'] == 'listar_cores_disponiveis':
+                        colors = tool_result['cores'] if isinstance(tool_result, dict) and 'cores' in tool_result else tool_result
+                        if colors:
+                            await show_colors_list_prompt(mcp_client, colors)
+                        else:
+                            await show_colors_no_results_prompt(mcp_client)
+                    # FIM INTEGRAÇÃO
                     user_facing_msg = format_tool_result_for_user(tool_call['name'], tool_result)
                     llm_facing_content = format_tool_result_for_llm(tool_call['name'], tool_result)
                     
