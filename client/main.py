@@ -186,6 +186,15 @@ def extract_vehicle_id_from_question(user_input):
             return None
     return None
 
+def extract_color_from_question(user_input, cores_disponiveis):
+    for cor in cores_disponiveis:
+        if cor.lower() in user_input.lower():
+            return cor
+    match = re.search(r'cor\s+([a-zA-Zçãõáéíóúâêôàèìòùäëïöü]+)', user_input, re.IGNORECASE)
+    if match:
+        return match.group(1).capitalize()
+    return None
+
 async def call_tool_with_retries(mcp_client, name, input_args, max_retries=3):
     last_error = None
     for attempt in range(1, max_retries + 1):
@@ -371,12 +380,19 @@ async def main_async():
                             await show_colors_list_prompt(mcp_client, colors)
                         else:
                             await show_colors_no_results_prompt(mcp_client)
+                        # Verificar se o usuário perguntou por uma cor específica
+                        cor_perguntada = extract_color_from_question(user_input, colors if colors else [])
+                        if cor_perguntada:
+                            if cor_perguntada in colors:
+                                print(f"A cor {cor_perguntada} está disponível em nosso inventário.")
+                            else:
+                                print(f"A cor {cor_perguntada} não está disponível em nosso inventário no momento.")
                     # FIM INTEGRAÇÃO
                     user_facing_msg = format_tool_result_for_user(tool_call['name'], tool_result)
                     llm_facing_content = format_tool_result_for_llm(tool_call['name'], tool_result)
                     
-                    conversation.append({"role": "assistant", "content": llm_response})
-                    conversation.append({"role": "tool", "name": tool_call['name'], "content": llm_facing_content})
+                    conversation.append({"role": "assistant", "content": str(llm_response or "")})
+                    conversation.append({"role": "tool", "name": str(tool_call.get('name', '')), "content": str(llm_facing_content or "")})
                     
                     messages_for_summary = conversation.copy()
                     if tool_call['name'] == 'buscar_veiculos':
@@ -386,18 +402,18 @@ async def main_async():
                     final_text = extract_final_response(final_response_llm)
                     final_text = clean_llm_response(final_text)
                     if final_text: stream_print(final_text)
-                    conversation.append({"role": "assistant", "content": final_response_llm})
+                    conversation.append({"role": "assistant", "content": str(final_response_llm or "")})
                 else:
                     error_message = f"Desculpe, ocorreu um erro ao tentar consultar a informação. Tente novamente."
                     if tool_error: print(f"Motivo: {tool_error}")
                     stream_print(error_message)
-                    conversation.append({"role": "assistant", "content": error_message})
+                    conversation.append({"role": "assistant", "content": str(error_message)})
             else:
                 # print('[DEBUG] Nenhuma chamada de ferramenta detectada!')
                 final_text = extract_final_response(llm_response)
                 final_text = clean_llm_response(final_text)
                 if final_text: stream_print(final_text)
-                conversation.append({"role": "assistant", "content": llm_response})
+                conversation.append({"role": "assistant", "content": str(llm_response or "")})
 
         except (KeyboardInterrupt, EOFError):
             print_status("\nSaindo do MCP client CLI.")
