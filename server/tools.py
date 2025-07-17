@@ -1,7 +1,7 @@
 from sqlalchemy import select, func, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
-from models import Veiculo, VehicleFilter, VehicleResult, BrandListOut, ModelListOut, YearRangeOut, PriceRangeOut
+from models import Veiculo, VehicleFilter, VehicleResult, BrandListOut, ModelListOut, YearRangeOut, PriceRangeOut, KmRangeOut
 
 async def buscar_veiculos(db: AsyncSession, filters: VehicleFilter) -> List[VehicleResult]:
     query = select(Veiculo)
@@ -29,7 +29,6 @@ async def buscar_veiculos(db: AsyncSession, filters: VehicleFilter) -> List[Vehi
         query = query.where(Veiculo.numero_portas == filters.doors)
     if filters.transmission:
         query = query.where(Veiculo.tipo_transmissao == filters.transmission)
-    # TODO: search_text (full-text search)
     result = await db.execute(query)
     veiculos = result.scalars().all()
     return [VehicleResult.from_orm(v) for v in veiculos]
@@ -57,11 +56,11 @@ async def obter_range_precos(db: AsyncSession) -> PriceRangeOut:
     min_price, max_price = result.one()
     return PriceRangeOut(min_price=float(min_price), max_price=float(max_price))
 
-async def obter_range_km(db: AsyncSession) -> dict:
+async def obter_range_km(db: AsyncSession) -> KmRangeOut:
     from sqlalchemy import func
     result = await db.execute(select(func.min(Veiculo.quilometragem), func.max(Veiculo.quilometragem)))
     min_km, max_km = result.one()
-    return {"min_km": int(min_km), "max_km": int(max_km)}
+    return KmRangeOut(min_km=int(min_km), max_km=int(max_km))
 
 async def listar_cores_disponiveis(db: AsyncSession) -> Dict[str, List[str]]:
     result = await db.execute(select(distinct(Veiculo.cor)))

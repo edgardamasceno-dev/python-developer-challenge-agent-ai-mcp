@@ -63,9 +63,7 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         payload = await request.json()
         req = JSONRPCRequest(**payload)
-        # Suporte ao método tools/list (MCP discovery)
         if req.method == "tools/list":
-            # Definição das tools no padrão MCP
             tools = [
                 {
                     "name": "buscar_veiculos",
@@ -96,7 +94,7 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 },
                 {
                     "name": "listar_modelos",
-                    "description": "List vehicle models, optionally filtered by brands.",
+                    "description": "List vehicle models, optionally filtered by brands.\n\nTo list models of all brands, omit the 'brands' parameter or pass an empty list.\nExample 1: List all models (any brand):\n{ }\n\nExample 2: List models for specific brands (e.g., Ford and Toyota):\n{\n  \"brands\": [\"Ford\", \"Toyota\"]\n}\n\nIf you want to see all available models, simply do not specify the 'brands' parameter.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -121,12 +119,11 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 },
                 {
                     "name": "obter_range_km",
-                    "description": "Get the min and max mileage (quilometragem) of available vehicles.",
+                    "description": "Get the min and max mileage (quilometragem) of available vehicles.\n\nReturns an object with min_km and max_km.\nExample: {\n  \"min_km\": 10827,\n  \"max_km\": 285427\n}",
                     "inputSchema": {"type": "object", "properties": {}}
                 },
             ]
             return JSONResponse(content=JSONRPCResponse(result={"tools": tools, "nextCursor": None}, id=req.id).dict(exclude_none=True))
-        # Suporte ao método prompts/list (MCP)
         if req.method == "prompts/list":
             prompts = [
                 {
@@ -140,12 +137,13 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                     "name": "car_search_result",
                     "description": "Prompt para exibir resultados de busca de veículos.",
                     "arguments": [
-                        {"name": "vehicle_count", "description": "Quantidade de veículos encontrados", "required": True}
+                        {"name": "vehicle_count", "description": "Quantidade de veículos encontrados", "required": True},
+                        {"name": "min_km", "description": "Quilometragem mínima disponível", "required": False},
+                        {"name": "max_km", "description": "Quilometragem máxima disponível", "required": False}
                     ]
                 }
             ]
             return JSONResponse(content=JSONRPCResponse(result={"prompts": prompts, "nextCursor": None}, id=req.id).dict(exclude_none=True))
-        # Suporte ao método prompts/get (MCP)
         if req.method == "prompts/get":
             name = req.params.get("name") if req.params else None
             arguments = req.params.get("arguments") if req.params else {}
@@ -155,11 +153,15 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de introdução", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
             elif name == "car_search_result":
                 vehicle_count = arguments.get("vehicle_count", 0)
-                prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. Veja os detalhes abaixo."
+                min_km = arguments.get("min_km")
+                max_km = arguments.get("max_km")
+                if min_km is not None and max_km is not None:
+                    prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. A quilometragem dos veículos disponíveis varia de {min_km:,} km a {max_km:,} km. Veja os detalhes abaixo."
+                else:
+                    prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. Veja os detalhes abaixo."
                 return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de resultado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
             else:
                 return JSONResponse(content=JSONRPCResponse(error=JSONRPCError(code=-32602, message="Unknown prompt name"), id=req.id).dict(exclude_none=True))
-        # Suporte ao método tools/call (MCP padrão)
         if req.method == "tools/call":
             name = req.params.get("name") if req.params else None
             arguments = req.params.get("arguments") if req.params else {}
@@ -171,7 +173,6 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                         id=req.id
                     ).dict(exclude_none=True)
                 )
-            # Chama a tool correspondente
             try:
                 if name == "buscar_veiculos":
                     filters = VehicleFilter(**arguments)
@@ -228,7 +229,6 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                     id=req.id
                 ).dict(exclude_none=True)
             )
-        # Dispatcher para cada método
         if req.method == "buscar_veiculos":
             filters = VehicleFilter(**(req.params or {}))
             result = await MCP_METHODS[req.method](db, filters)

@@ -137,7 +137,7 @@ def format_tool_result_for_user(tool_name, tool_result):
 
     if tool_name == "buscar_veiculos":
         vehicles = tool_result if isinstance(tool_result, list) else []
-        print_vehicle_list_aligned(vehicles)
+        # Não exibir lista antes da LLM
         return f"Encontrei {len(vehicles)} veículo(s) com base na sua busca." if vehicles else "Não encontrei veículos com os critérios especificados."
 
     elif tool_name in ["listar_marcas", "listar_modelos", "listar_cores_disponiveis"]:
@@ -145,13 +145,11 @@ def format_tool_result_for_user(tool_name, tool_result):
         if not items: return "Não encontrei nenhuma opção disponível."
         noun = "marcas" if "marcas" in tool_name else "modelos" if "modelos" in tool_name else "cores"
         msg = f"As {noun} disponíveis são: {', '.join(items)}."
-        stream_print(msg)
         return msg
 
     elif tool_name == "obter_range_anos":
         anos = tool_result if isinstance(tool_result, dict) else {}
         msg = f"Temos veículos fabricados entre {anos.get('min_year')} e {anos.get('max_year')}."
-        stream_print(msg)
         return msg
 
     elif tool_name == "obter_range_precos":
@@ -164,14 +162,11 @@ def format_tool_result_for_user(tool_name, tool_result):
             max_price = float(precos.get('max_price', 0.0))
             max_price_str = f"{max_price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         except (ValueError, TypeError): max_price_str = "0,00"
-        
         msg = f"Os preços dos nossos veículos variam de R$ {min_price_str} a R$ {max_price_str}."
-        stream_print(msg)
         return msg
     
-    formatted_result = json.dumps(tool_result, ensure_ascii=False, indent=2)
-    stream_print(formatted_result)
-    return formatted_result
+    # Não exibir resultado formatado cru
+    return ""
 
 
 def format_tool_result_for_llm(tool_name, tool_result):
@@ -287,8 +282,7 @@ async def main_async():
                     final_response_llm = llm.chat(messages_for_summary)
                     final_text = extract_final_response(final_response_llm)
                     final_text = clean_llm_response(final_text)
-                    if final_text and not (user_facing_msg and final_text in user_facing_msg):
-                        stream_print(final_text)
+                    if final_text: stream_print(final_text)
                     conversation.append({"role": "assistant", "content": final_response_llm})
                 else:
                     error_message = f"Desculpe, ocorreu um erro ao tentar consultar a informação. Tente novamente."

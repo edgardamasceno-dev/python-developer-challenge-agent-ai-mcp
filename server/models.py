@@ -23,7 +23,6 @@ class Veiculo(Base):
     preco = Column(Numeric(10, 2), nullable=False)
     data_criacao = Column(TIMESTAMP(timezone=True), server_default=text("now() at time zone 'utc'"))
 
-# Pydantic models para entrada/saída das tools
 class VehicleFilter(BaseModel):
     search_text: Optional[str] = None
     brand: Optional[str] = None
@@ -82,4 +81,8 @@ class YearRangeOut(BaseModel):
 
 class PriceRangeOut(BaseModel):
     min_price: float
-    max_price: float 
+    max_price: float
+
+class KmRangeOut(BaseModel):
+    min_km: int
+    max_km: int 
