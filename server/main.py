@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Any, Optional, Literal
 from db import get_db
 from tools import (
-    buscar_veiculos, listar_marcas, listar_modelos, obter_range_anos, obter_range_precos
+    buscar_veiculos, listar_marcas, listar_modelos, obter_range_anos, obter_range_precos, listar_cores_disponiveis, obter_range_km
 )
 from models import VehicleFilter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +54,8 @@ MCP_METHODS = {
     "listar_modelos": listar_modelos,
     "obter_range_anos": obter_range_anos,
     "obter_range_precos": obter_range_precos,
+    "listar_cores_disponiveis": listar_cores_disponiveis,
+    "obter_range_km": obter_range_km,
 }
 
 @app.post("/mcp")
@@ -67,7 +69,7 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
             tools = [
                 {
                     "name": "buscar_veiculos",
-                    "description": "Search vehicles in the database with advanced filters.",
+                    "description": "Search vehicles in the database with advanced filters.\n\nYou can filter by any combination of the following attributes:\n- brand (string): Vehicle brand.\n- model (string): Vehicle model.\n- year_min/year_max (integer): Manufacturing year range.\n- price_min/price_max (number): Price range.\n- km_min/km_max (integer): Mileage range.\n- fuel_type (string): Fuel type.\n- color (string): Color.\n- doors (integer): Number of doors.\n- transmission (string): Transmission type.\n- search_text (string): Free text search.\n\nExample 1: Find Volkswagens from 2020 or newer up to R$80,000:\n{\n  \"brand\": \"Volkswagen\",\n  \"year_min\": 2020,\n  \"price_max\": 80000\n}\n\nExample 2: Find red Honda cars with automatic transmission:\n{\n  \"brand\": \"Honda\",\n  \"color\": \"Vermelho\",\n  \"transmission\": \"Automática\"\n}\n\nYou can combine any filters as needed.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -110,6 +112,16 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 {
                     "name": "obter_range_precos",
                     "description": "Get the min and max prices of available vehicles.",
+                    "inputSchema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "listar_cores_disponiveis",
+                    "description": "List all unique vehicle colors available.",
+                    "inputSchema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "obter_range_km",
+                    "description": "Get the min and max mileage (quilometragem) of available vehicles.",
                     "inputSchema": {"type": "object", "properties": {}}
                 },
             ]
@@ -160,28 +172,51 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                     ).dict(exclude_none=True)
                 )
             # Chama a tool correspondente
-            if name == "buscar_veiculos":
-                filters = VehicleFilter(**arguments)
-                result = await MCP_METHODS[name](db, filters)
-                return JSONResponse(content=JSONRPCResponse(result=[r.dict() for r in result], id=req.id).dict(exclude_none=True))
-            elif name == "listar_marcas":
-                result = await MCP_METHODS[name](db)
-                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
-            elif name == "listar_modelos":
-                brands = arguments.get("brands")
-                result = await MCP_METHODS[name](db, brands)
-                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
-            elif name == "obter_range_anos":
-                result = await MCP_METHODS[name](db)
-                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
-            elif name == "obter_range_precos":
-                result = await MCP_METHODS[name](db)
-                return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
-            else:
+            try:
+                if name == "buscar_veiculos":
+                    filters = VehicleFilter(**arguments)
+                    result = await MCP_METHODS[name](db, filters)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=[r.dict() for r in result], id=req.id).dict(exclude_none=True))
+                elif name == "listar_marcas":
+                    result = await MCP_METHODS[name](db)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+                elif name == "listar_modelos":
+                    brands = arguments.get("brands")
+                    result = await MCP_METHODS[name](db, brands)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+                elif name == "obter_range_anos":
+                    result = await MCP_METHODS[name](db)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+                elif name == "obter_range_precos":
+                    result = await MCP_METHODS[name](db)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result.dict(), id=req.id).dict(exclude_none=True))
+                elif name == "listar_cores_disponiveis":
+                    result = await MCP_METHODS[name](db)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result, id=req.id).dict(exclude_none=True))
+                elif name == "obter_range_km":
+                    result = await MCP_METHODS[name](db)
+                    print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | Result: {result}")
+                    return JSONResponse(content=JSONRPCResponse(result=result, id=req.id).dict(exclude_none=True))
+                else:
+                    return JSONResponse(
+                        status_code=400,
+                        content=JSONRPCResponse(
+                            error=JSONRPCError(code=-32601, message=f"Tool not found: {name}"),
+                            id=req.id
+                        ).dict(exclude_none=True)
+                    )
+            except Exception as e:
+                print(f"[MCP SERVER] Tool: {name} | Args: {arguments} | ERROR: {e}")
                 return JSONResponse(
-                    status_code=400,
+                    status_code=500,
                     content=JSONRPCResponse(
-                        error=JSONRPCError(code=-32601, message=f"Tool not found: {name}"),
+                        error=JSONRPCError(code=-32603, message=f"Internal error: {e}"),
                         id=req.id
                     ).dict(exclude_none=True)
                 )
