@@ -31,3 +31,23 @@ Para uma descrição detalhada dos requisitos do desafio, consulte o documento a
 
 *   **[Descrição Completa do Desafio](./docs/challenge.md#português-br)**
 *   **[Especificação Técnica – Master Plan](./docs/master_plan.md#especificação-técnica--master-plan-v50)**
+
+## Project Structure
+
+The repository is organized as follows:
+
+```
+/
+├── docs/           # Project documentation (master_plan, tasks, challenge, etc.)
+├── scripts/        # Utility scripts (e.g., data generation, migrations)
+├── docker/         # Docker and database configuration files
+│   └── postgres/
+│       └── init/   # SQL schema and initial data
+├── server/         # FastAPI backend (MCP server)
+├── client/         # CLI code (MCP client/agent)
+├── docker-compose.yml
+├── .env.example
+├── README.md
+```
+
+Each directory contains a `.gitkeep` file or documentation to ensure it is versioned. See the `master_plan.md` for detailed architectural decisions.
