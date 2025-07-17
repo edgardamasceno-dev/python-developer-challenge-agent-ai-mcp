@@ -14,7 +14,6 @@ OUTPUT_DIR = Path(__file__).parent.parent / "docker" / "postgres" / "init"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_FILE = OUTPUT_DIR / "02-populate-data.sql"
 
-# Realistic data for the Brazilian market (data in pt-BR)
 brands_models = {
     'Ford': ['Ka', 'Fiesta', 'Focus', 'EcoSport', 'Ranger'],
     'Chevrolet': ['Onix', 'Prisma', 'Cruze', 'S10', 'Tracker'],
