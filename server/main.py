@@ -191,19 +191,39 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
         if req.method == "prompts/get":
             name = req.params.get("name") if req.params else None
             arguments = req.params.get("arguments") if req.params else {}
-            if name == "car_search_intro":
-                user_name = arguments.get("user_name", "")
-                prompt_text = f"Olá{', ' + user_name if user_name else ''}! Vamos encontrar o carro ideal para você. Me conte o que procura!"
-                return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de introdução", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
-            elif name == "car_search_result":
+            if name == "search_intro":
+                prompt_text = "Vamos encontrar o carro ideal para você. Quais características você procura?"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Mensagem de introdução", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "filters_summary":
+                filters = arguments.get("filters", {})
+                prompt_text = f"Buscando veículos com os seguintes filtros: {filters}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Resumo dos filtros aplicados", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "search_result_summary":
                 vehicle_count = arguments.get("vehicle_count", 0)
+                min_price = arguments.get("min_price")
+                max_price = arguments.get("max_price")
                 min_km = arguments.get("min_km")
                 max_km = arguments.get("max_km")
-                if min_km is not None and max_km is not None:
-                    prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. A quilometragem dos veículos disponíveis varia de {min_km:,} km a {max_km:,} km. Veja os detalhes abaixo."
-                else:
-                    prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. Veja os detalhes abaixo."
-                return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de resultado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+                price_str = f" Preço: R$ {min_price} a R$ {max_price}." if min_price is not None and max_price is not None else ""
+                km_str = f" Quilometragem: {min_km} a {max_km} km." if min_km is not None and max_km is not None else ""
+                prompt_text = f"Foram encontrados {vehicle_count} veículos.{price_str}{km_str}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Resumo dos resultados encontrados", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "no_results":
+                filters = arguments.get("filters", {})
+                prompt_text = f"Nenhum veículo encontrado com os filtros informados: {filters}. Tente ajustar os critérios."
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Nenhum resultado encontrado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "vehicle_details":
+                vehicle = arguments.get("vehicle", {})
+                prompt_text = f"{vehicle.get('brand', '')} {vehicle.get('model', '')} {vehicle.get('year_manufacture', '')}, {vehicle.get('transmission', '')}, {vehicle.get('km', '')} km, R$ {vehicle.get('price', '')}, cor {vehicle.get('color', '')}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Detalhes do veículo", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "suggest_more_filters":
+                suggested_filters = arguments.get("suggested_filters", [])
+                prompt_text = "Sua busca retornou muitos veículos. Que tal filtrar por " + ", ".join(suggested_filters) + "?" if suggested_filters else "Sua busca retornou muitos veículos. Que tal adicionar mais filtros?"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Sugestão de filtros adicionais", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "action_confirmation":
+                action = arguments.get("action", "")
+                prompt_text = f"Filtro aplicado: {action}"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Confirmação de ação", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
             else:
                 return JSONResponse(content=JSONRPCResponse(error=JSONRPCError(code=-32602, message="Unknown prompt name"), id=req.id).dict(exclude_none=True))
         if req.method == "tools/call":
