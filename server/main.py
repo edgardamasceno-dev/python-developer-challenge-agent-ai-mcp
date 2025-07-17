@@ -96,7 +96,7 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
                 },
                 {
                     "name": "listar_modelos",
-                    "description": "List vehicle models, optionally filtered by brands.",
+                    "description": "List vehicle models. If you want models from specific brands, provide the 'brands' parameter as a list of brand names. To list models from all brands, omit the 'brands' parameter or pass an empty list.\n\nExamples:\n- All models: {}\n- Only Ford and Toyota: {\"brands\": [\"Ford\", \"Toyota\"]}",
                     "inputSchema": {
                         "type": "object",
                         "properties": {

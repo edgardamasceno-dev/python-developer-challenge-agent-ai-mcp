@@ -83,3 +83,10 @@ class YearRangeOut(BaseModel):
 class PriceRangeOut(BaseModel):
     min_price: float
     max_price: float 
+
+class ColorListOut(BaseModel):
+    cores: List[str] 
+
+class KmRangeOut(BaseModel):
+    min_km: int
+    max_km: int 

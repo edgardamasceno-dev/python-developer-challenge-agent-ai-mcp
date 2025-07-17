@@ -15,12 +15,12 @@ venv/
 env/
 ENV/
 
+# Ambiente e variáveis sensíveis
+.env
+
 # Arquivos temporários de editor
 .vscode/
 .idea/
 *.swp
 *~
 .DS_Store
-
-# Ambiente e variáveis sensíveis
-.env
