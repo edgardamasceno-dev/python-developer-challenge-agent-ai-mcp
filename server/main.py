@@ -61,6 +61,92 @@ async def mcp_endpoint(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         payload = await request.json()
         req = JSONRPCRequest(**payload)
+        # Suporte ao método tools/list (MCP discovery)
+        if req.method == "tools/list":
+            # Definição das tools no padrão MCP
+            tools = [
+                {
+                    "name": "buscar_veiculos",
+                    "description": "Search vehicles in the database with advanced filters.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "search_text": {"type": "string", "description": "Free text search"},
+                            "brand": {"type": "string"},
+                            "model": {"type": "string"},
+                            "year_min": {"type": "integer"},
+                            "year_max": {"type": "integer"},
+                            "price_min": {"type": "number"},
+                            "price_max": {"type": "number"},
+                            "km_min": {"type": "integer"},
+                            "km_max": {"type": "integer"},
+                            "fuel_type": {"type": "string"},
+                            "color": {"type": "string"},
+                            "doors": {"type": "integer"},
+                            "transmission": {"type": "string"}
+                        },
+                    },
+                },
+                {
+                    "name": "listar_marcas",
+                    "description": "List all unique vehicle brands available.",
+                    "inputSchema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "listar_modelos",
+                    "description": "List vehicle models, optionally filtered by brands.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "brands": {"type": "array", "items": {"type": "string"}}
+                        },
+                    },
+                },
+                {
+                    "name": "obter_range_anos",
+                    "description": "Get the min and max manufacturing years of available vehicles.",
+                    "inputSchema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "obter_range_precos",
+                    "description": "Get the min and max prices of available vehicles.",
+                    "inputSchema": {"type": "object", "properties": {}}
+                },
+            ]
+            return JSONResponse(content=JSONRPCResponse(result={"tools": tools, "nextCursor": None}, id=req.id).dict(exclude_none=True))
+        # Suporte ao método prompts/list (MCP)
+        if req.method == "prompts/list":
+            prompts = [
+                {
+                    "name": "car_search_intro",
+                    "description": "Prompt de introdução para busca de veículos.",
+                    "arguments": [
+                        {"name": "user_name", "description": "Nome do usuário", "required": False}
+                    ]
+                },
+                {
+                    "name": "car_search_result",
+                    "description": "Prompt para exibir resultados de busca de veículos.",
+                    "arguments": [
+                        {"name": "vehicle_count", "description": "Quantidade de veículos encontrados", "required": True}
+                    ]
+                }
+            ]
+            return JSONResponse(content=JSONRPCResponse(result={"prompts": prompts, "nextCursor": None}, id=req.id).dict(exclude_none=True))
+        # Suporte ao método prompts/get (MCP)
+        if req.method == "prompts/get":
+            name = req.params.get("name") if req.params else None
+            arguments = req.params.get("arguments") if req.params else {}
+            if name == "car_search_intro":
+                user_name = arguments.get("user_name", "")
+                prompt_text = f"Olá{', ' + user_name if user_name else ''}! Vamos encontrar o carro ideal para você. Me conte o que procura!"
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de introdução", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            elif name == "car_search_result":
+                vehicle_count = arguments.get("vehicle_count", 0)
+                prompt_text = f"Encontrei {vehicle_count} veículo(s) compatível(is) com sua busca. Veja os detalhes abaixo."
+                return JSONResponse(content=JSONRPCResponse(result={"description": "Prompt de resultado", "messages": [{"role": "assistant", "content": prompt_text}]}, id=req.id).dict(exclude_none=True))
+            else:
+                return JSONResponse(content=JSONRPCResponse(error=JSONRPCError(code=-32602, message="Unknown prompt name"), id=req.id).dict(exclude_none=True))
         if req.method not in MCP_METHODS:
             return JSONResponse(
                 status_code=400,
