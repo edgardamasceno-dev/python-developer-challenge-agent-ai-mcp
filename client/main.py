@@ -1,12 +1,13 @@
-from config import get_env
-from mcp_client import get_mcp_clients
-from llm import get_llm_service
-from ui import print_status, print_error, print_markdown
-from prompt_toolkit import PromptSession
-import json
-import time
-import sys
+import asyncio
 import random
+import time
+import re
+import json
+
+from mcp_client import get_mcp_clients  # Seu client MCP
+from llm import get_llm_service         # Seu wrapper de LLM
+from ui import print_status, print_error
+from prompt_toolkit import PromptSession
 
 AGENT_NAMES = [
     "Eduardo", "Lucas", "Marina", "Paula", "Rafael", "Camila", "João", "Carla", "Bruno", "Ana"
@@ -14,59 +15,60 @@ AGENT_NAMES = [
 AGENT_NAME = random.choice(AGENT_NAMES)
 
 SYSTEM_PROMPT = f"""
-Você é {AGENT_NAME}, um especialista em vendas de carros, amigável, proativo e extremamente preciso. Seu objetivo principal é ajudar os usuários a encontrar o veículo perfeito em nosso inventário, utilizando um conjunto de ferramentas internas.
+Você é {AGENT_NAME}, um especialista em vendas de carros, amigável, proativo e extremamente preciso. Seu objetivo principal é ajudar os usuários a encontrar o veículo perfeito em nosso inventário, utilizando um conjunto de ferramentas internas que serão listadas para você.
 
 <regras_de_comportamento>
 1. Sempre responda em português do Brasil (pt-BR), de forma natural e profissional.
-2. Nunca mencione ao usuário que está usando ferramentas internas, nem diga que está executando, buscando, consultando, etc. Apenas apresente a informação como se fosse sua.
-3. Seja proativo: se o usuário for vago, sugira opções e faça perguntas para refinar a busca.
-4. Nunca invente informações: tudo deve ser obtido pelas ferramentas internas.
-5. Use ferramentas de suporte antes da principal, mas nunca mencione isso ao usuário.
-6. Formate resultados de listas em tabela ou lista clara, mas nunca diga que está \"listando\" ou \"executando\".
-7. Nunca use emojis.
+2. Para atender ao pedido do usuário, você DEVE usar as ferramentas disponíveis. Consulte a lista de ferramentas e suas descrições para escolher a mais adequada.
+3. Nunca mencione ao usuário que você está usando ferramentas. Apenas apresente a informação como se fosse sua.
+4. Seja proativo: se o usuário for vago, sugira opções e faça perguntas para refinar a busca.
+5. Nunca invente informações: tudo deve ser obtido pelas ferramentas.
+6. Ao apresentar uma lista de veículos, exiba todas as propriedades relevantes (UUID, marca, modelo, ano fabricação, ano modelo, motorização, tipo combustível, cor, km, portas, transmissão, preço), sempre com o UUID como primeiro campo.
+7. Considere 'id' e 'uuid' como sinônimos. Se o usuário pedir o id de um veículo de uma lista, use o contexto da conversa para obter o UUID real daquele item.
+8. Nunca use markdown ou emojis. Apenas texto puro.
+9. Se o usuário pedir confirmação, valide a resposta anterior consultando a ferramenta apropriada novamente.
+10. Você NUNCA deve responder perguntas sobre o inventário (marcas, modelos, cores, preços, etc.) sem antes consultar a ferramenta correspondente.
 </regras_de_comportamento>
 
-<processo_de_raciocinio>
-1. Analise a última mensagem do usuário e o histórico.
-2. Decida a próxima ação. Precisa de mais informação? Já pode buscar veículos?
-3. Se usar uma ferramenta, use a informação retornada para responder ao usuário de forma natural, SEM mencionar a ferramenta.
-4. Responda ao usuário de forma clara, direta e em português.
-</processo_de_raciocinio>
+IMPORTANTE: Sempre que precisar consultar alguma informação, responda APENAS com um bloco <tool_call> em JSON, sem texto antes ou depois. Exemplo:
+<tool_call>
+{{
+  "name": "nome_da_ferramenta",
+  "input": {{
+    "argumento1": "valor1",
+    "argumento2": "valor2"
+  }}
+}}
+</tool_call>
 """
 
+last_vehicle_list = []
+
 def parse_tool_call(llm_response):
-    """Extrai o bloco de chamada de tool em JSON da resposta do LLM."""
-    import re
-    match = re.search(r'\{\s*"name"\s*:\s*"[^"]+".*?\}', llm_response, re.DOTALL)
+    match = re.search(r'<tool_call>\s*({[\s\S]+?})\s*</tool_call>', llm_response, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(0))
+            return json.loads(match.group(1))
+        except Exception as e:
+            print(f'[DEBUG] Erro ao parsear tool_call: {e}')
+            return None
+    match2 = re.search(r'({\s*"name"\s*:\s*"[^"]+".*?\})', llm_response, re.DOTALL)
+    if match2:
+        try:
+            return json.loads(match2.group(1))
         except Exception:
             return None
     return None
 
 def extract_final_response(llm_response):
-    """Remove blocos <thinking>, blocos de ação e retorna apenas a resposta final do agente."""
-    import re
-    # Remove blocos <thinking>...</thinking>
-    response = re.sub(r'<thinking>[\s\S]*?</thinking>', '', llm_response, flags=re.IGNORECASE)
-    # Remove blocos de ação (```action ...``` ou blocos JSON)
-    response = re.sub(r'```action[\s\S]*?```', '', response, flags=re.IGNORECASE)
-    response = re.sub(r'```json[\s\S]*?```', '', response, flags=re.IGNORECASE)
-    # Remove blocos de código genéricos
-    response = re.sub(r'```[\s\S]*?```', '', response)
-    # Remove espaços extras
+    response = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', llm_response, flags=re.IGNORECASE)
+    response = re.sub(r'{\s*"name"\s*:\s*"[^"]+".*?\}', '', response, flags=re.DOTALL)
     return response.strip()
 
 def clean_llm_response(text):
-    import re
-    # Remove blocos <execute=...>
-    text = re.sub(r'<execute=.*?>', '', text)
-    # Remove frases como "Executando...", "Buscando...", "Consultando..."
-    text = re.sub(r'(?i)(executando|buscando|consultando|verificando)[^\n\r]*[\n\r]?', '', text)
-    # Remove blocos de código e instruções
     text = re.sub(r'```[\s\S]*?```', '', text)
-    # Remove espaços extras
+    text = re.sub(r'<.*?>', '', text)
+    text = re.sub(r'(?i)(executando|buscando|consultando|verificando)[^\n\r]*[\n\r]?', '', text)
     return text.strip()
 
 def stream_print(text, delay=0.01):
@@ -75,132 +77,240 @@ def stream_print(text, delay=0.01):
         time.sleep(delay)
     print()
 
-def is_list_tool(tool_name):
-    return tool_name in {"listar_marcas", "listar_modelos", "obter_range_anos", "obter_range_precos"}
+# --- FUNÇÃO CORRIGIDA ---
+# Corrigido o SyntaxError e melhorada a formatação de números para o padrão pt-BR.
+def print_vehicle_list_aligned(vehicles):
+    global last_vehicle_list
+    if not vehicles:
+        print("Nenhum veículo encontrado com os critérios informados.")
+        last_vehicle_list = []
+        return
+    last_vehicle_list = vehicles
+    # Larguras ajustadas para acomodar a formatação de número e preço
+    widths = {
+        "uuid": 36, "brand": 12, "model": 12, "year_manufacture": 6, "year_model": 6,
+        "engine": 6, "fuel_type": 10, "color": 10, "km": 9, "doors": 2, "transmission": 12, "price": 14
+    }
+    header = f"{'#':>2}. {'UUID':<{widths['uuid']}} | {'Marca':<{widths['brand']}} | {'Modelo':<{widths['model']}} | {'AnoF':>{widths['year_manufacture']}} | {'AnoM':>{widths['year_model']}} | {'Mot.':>{widths['engine']}} | {'Comb.':<{widths['fuel_type']}} | {'Cor':<{widths['color']}} | {'KM':>{widths['km']}} | {'P':>{widths['doors']}} | {'Transmissão':<{widths['transmission']}} | {'Preço':>{widths['price']}}"
+    print(header)
+    print('-' * len(header))
+    for idx, v in enumerate(vehicles, 1):
+        # Preparar variáveis de preço e km com tratamento de erro e formatação pt-BR
+        try:
+            price_val = float(v.get('price', 0.0))
+            price_str_en = f"{price_val:,.2f}"
+            price_str_br = "R$ " + price_str_en.replace(",", "X").replace(".", ",").replace("X", ".")
+        except (ValueError, TypeError):
+            price_str_br = "R$ 0,00"
 
-def format_tool_result(tool_name, tool_result):
-    from ui import print_table, print_markdown
-    if tool_name == "listar_marcas":
-        marcas = tool_result.get('result')
-        if isinstance(marcas, dict) and 'marcas' in marcas:
-            marcas = marcas['marcas']
-        if isinstance(marcas, list):
-            # Mensagem clara em português
-            msg = f"As marcas disponíveis são: {', '.join(marcas)}."
-            print(msg)
-            print_table(["Marcas"], [[m] for m in marcas], title="Marcas disponíveis")
-            return msg
-        else:
-            print_markdown(str(marcas))
-            return str(marcas)
-    elif tool_name == "listar_modelos":
-        modelos = tool_result.get('result')
-        if isinstance(modelos, dict) and 'modelos' in modelos:
-            modelos = modelos['modelos']
-        if isinstance(modelos, list):
-            msg = f"Os modelos disponíveis são: {', '.join(modelos)}."
-            print(msg)
-            print_table(["Modelos"], [[m] for m in modelos], title="Modelos disponíveis")
-            return msg
-        else:
-            print_markdown(str(modelos))
-            return str(modelos)
+        try:
+            km_val = int(v.get('km', 0))
+            km_str = f"{km_val:,d}".replace(",", ".")
+        except (ValueError, TypeError):
+            km_str = "0"
+            
+        doors_str = str(v.get('doors', ''))
+
+        # Construir a linha final com valores pré-formatados, evitando o SyntaxError
+        line = (
+            f"{idx:>2}. {v.get('id', ''):<{widths['uuid']}} | "
+            f"{v.get('brand', ''):<{widths['brand']}} | "
+            f"{v.get('model', ''):<{widths['model']}} | "
+            f"{v.get('year_manufacture', ''):>{widths['year_manufacture']}} | "
+            f"{v.get('year_model', ''):>{widths['year_model']}} | "
+            f"{v.get('engine', ''):>{widths['engine']}} | "
+            f"{v.get('fuel_type', ''):<{widths['fuel_type']}} | "
+            f"{v.get('color', ''):<{widths['color']}} | "
+            f"{km_str:>{widths['km']}} | "
+            f"{doors_str:>{widths['doors']}} | "
+            f"{v.get('transmission', ''):<{widths['transmission']}} | "
+            f"{price_str_br:>{widths['price']}}"
+        )
+        print(line)
+
+# --- FUNÇÃO CORRIGIDA ---
+# Melhorada a formatação de preço para o padrão pt-BR.
+def format_tool_result_for_user(tool_name, tool_result):
+    """Formata o resultado da ferramenta para exibição ao usuário final."""
+    if isinstance(tool_result, dict) and 'result' in tool_result:
+        tool_result = tool_result['result']
+
+    if tool_name == "buscar_veiculos":
+        vehicles = tool_result if isinstance(tool_result, list) else []
+        print_vehicle_list_aligned(vehicles)
+        return f"Encontrei {len(vehicles)} veículo(s) com base na sua busca." if vehicles else "Não encontrei veículos com os critérios especificados."
+
+    elif tool_name in ["listar_marcas", "listar_modelos", "listar_cores_disponiveis"]:
+        items = tool_result if isinstance(tool_result, list) else []
+        if not items: return "Não encontrei nenhuma opção disponível."
+        noun = "marcas" if "marcas" in tool_name else "modelos" if "modelos" in tool_name else "cores"
+        msg = f"As {noun} disponíveis são: {', '.join(items)}."
+        stream_print(msg)
+        return msg
+
     elif tool_name == "obter_range_anos":
-        anos = tool_result.get('result')
-        if isinstance(anos, dict):
-            msg = f"Os veículos disponíveis vão de {anos.get('min_year')} até {anos.get('max_year')}."
-            print(msg)
-            print_table(["Ano Mínimo", "Ano Máximo"], [[anos.get('min_year'), anos.get('max_year')]], title="Faixa de Anos")
-            return msg
-        else:
-            print_markdown(str(anos))
-            return str(anos)
-    elif tool_name == "obter_range_precos":
-        precos = tool_result.get('result')
-        if isinstance(precos, dict):
-            msg = f"Os preços disponíveis vão de R$ {precos.get('min_price')} até R$ {precos.get('max_price')}."
-            print(msg)
-            print_table(["Preço Mínimo", "Preço Máximo"], [[precos.get('min_price'), precos.get('max_price')]], title="Faixa de Preços")
-            return msg
-        else:
-            print_markdown(str(precos))
-            return str(precos)
-    else:
-        print_markdown(str(tool_result))
-        return str(tool_result)
+        anos = tool_result if isinstance(tool_result, dict) else {}
+        msg = f"Temos veículos fabricados entre {anos.get('min_year')} e {anos.get('max_year')}."
+        stream_print(msg)
+        return msg
 
-def main():
+    elif tool_name == "obter_range_precos":
+        precos = tool_result if isinstance(tool_result, dict) else {}
+        try:
+            min_price = float(precos.get('min_price', 0.0))
+            min_price_str = f"{min_price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (ValueError, TypeError): min_price_str = "0,00"
+        try:
+            max_price = float(precos.get('max_price', 0.0))
+            max_price_str = f"{max_price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (ValueError, TypeError): max_price_str = "0,00"
+        
+        msg = f"Os preços dos nossos veículos variam de R$ {min_price_str} a R$ {max_price_str}."
+        stream_print(msg)
+        return msg
+    
+    formatted_result = json.dumps(tool_result, ensure_ascii=False, indent=2)
+    stream_print(formatted_result)
+    return formatted_result
+
+
+def format_tool_result_for_llm(tool_name, tool_result):
+    if tool_name == "buscar_veiculos":
+        return json.dumps(tool_result, ensure_ascii=False)
+    if isinstance(tool_result, dict) and 'result' in tool_result:
+        return json.dumps(tool_result['result'], ensure_ascii=False)
+    return json.dumps(tool_result, ensure_ascii=False)
+
+
+def extract_vehicle_id_from_question(user_input):
+    match = re.search(r'(?:id|uuid)\s*(?:do|da)?\s*(\d+)', user_input, re.IGNORECASE)
+    if match:
+        try:
+            return int(match.group(1))
+        except (ValueError, IndexError):
+            return None
+    return None
+
+async def call_tool_with_retries(mcp_client, name, input_args, max_retries=3):
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            result = await mcp_client.call_tool(name, input_args)
+            return result, None
+        except Exception as e:
+            last_error = e
+            print(f"[Erro] Falha ao executar tool '{name}' (tentativa {attempt}/{max_retries}): {e}")
+            await asyncio.sleep(0.5)
+    return None, last_error
+
+async def main_async():
+    global last_vehicle_list
     print_status("MCP client CLI is running")
     mcp_clients = get_mcp_clients()
     if not mcp_clients:
         print_error("No MCP servers configured. Check MCP_SERVERS in your .env.")
         return
-    print_status(f"Found {len(mcp_clients)} MCP server(s). Descobrindo tools...")
-    import asyncio
-    async def discover():
-        await mcp_clients[0].list_tools()
-    asyncio.run(discover())
+
+    mcp_client = mcp_clients[0]
+    print_status(f"Conectado a {mcp_client.server_url}. Descobrindo ferramentas...")
+
+    try:
+        await mcp_client.list_tools()
+        tools = mcp_client.tools or []
+        if not tools:
+            print_error("Nenhuma ferramenta encontrada no MCP. Verifique o servidor MCP.")
+            return
+    except Exception as e:
+        print_error(f"Falha ao descobrir ferramentas do MCP: {e}")
+        return
+
+    tool_defs = []
+    for tool in tools:
+        params = tool.get('parameters', {}).get('properties', {})
+        param_defs = [f"  - {name} ({prop.get('type')}): {prop.get('description')}" for name, prop in params.items()]
+        param_str = "\n".join(param_defs)
+        tool_defs.append(f"Nome: {tool['name']}\nDescrição: {tool['description']}\nParâmetros:\n{param_str if param_str else '  Nenhum'}")
+    tools_prompt_section = "Você tem acesso às seguintes ferramentas para consulta:\n<ferramentas>\n" + "\n\n".join(tool_defs) + "\n</ferramentas>"
+    
+    tool_names = ', '.join([t['name'] for t in tools])
+    print_status(f"Ferramentas disponíveis para o agente: {tool_names}.")
+    
     llm = get_llm_service()
-    # Exibe tools descobertas de forma amigável
-    tools = mcp_clients[0].tools
-    if tools:
-        tool_names = ', '.join([t['name'].replace('_', ' ') for t in tools])
-        print_status(f"Ferramentas disponíveis para o agente: {tool_names}.")
-    print_status(f"LLM provider: {llm.provider}")
+    print_status(f"LLM provider: {llm.provider} | Model: {getattr(llm, 'model', 'desconhecido')}")
+    
     session = PromptSession()
-    conversation = []
-    # Inicia com o system prompt
-    conversation.append({"role": "system", "content": SYSTEM_PROMPT})
-    print_status(f"Olá! Meu nome é {AGENT_NAME} e estou aqui para ajudar você a encontrar o carro ideal.")
+    conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    print_status(f"\nOlá! Meu nome é {AGENT_NAME} e estou aqui para ajudar você a encontrar o carro ideal.")
+
     while True:
         try:
-            user_input = session.prompt('> ')
+            user_input = await session.prompt_async('> ')
             if user_input.strip().lower() in {'exit', 'quit'}:
-                print_status("Exiting MCP client CLI.")
+                print_status("Saindo do MCP client CLI.")
                 break
-            conversation.append({"role": "user", "content": user_input})
-            # Monta contexto para o LLM
-            messages = conversation.copy()
-            # Adiciona tools disponíveis
-            tools = mcp_clients[0].tools
-            tool_defs = "\n".join([f"- {t['name']}: {t['description']}" for t in tools])
-            messages.append({"role": "system", "content": f"Available tools:\n{tool_defs}"})
-            # Chama o LLM
-            llm_response = llm.chat(messages)
-            if not llm_response:
-                print_error("No response from LLM.")
+
+            idx = extract_vehicle_id_from_question(user_input)
+            if idx is not None and last_vehicle_list:
+                if 1 <= idx <= len(last_vehicle_list):
+                    vehicle = last_vehicle_list[idx - 1]
+                    uuid = vehicle.get("id") or vehicle.get("uuid")
+                    stream_print(f"O ID do veículo {idx} ({vehicle.get('brand')} {vehicle.get('model')}) é: {uuid}")
+                else:
+                    stream_print("Não foi possível encontrar o veículo com este número na lista anterior.")
                 continue
-            # Extrai e exibe apenas a resposta final do agente
-            final_text = extract_final_response(llm_response)
-            final_text = clean_llm_response(final_text)
-            if final_text:
-                stream_print(final_text)
-            # Verifica se há chamada de tool
+
+            conversation.append({"role": "user", "content": user_input})
+            
+            messages_for_llm = conversation.copy()
+            messages_for_llm.append({"role": "system", "content": tools_prompt_section})
+
+            llm_response = llm.chat(messages_for_llm)
+            # print(f'[DEBUG LLM RAW] {llm_response}')
+
             tool_call = parse_tool_call(llm_response)
             if tool_call:
-                async def call():
-                    result = await mcp_clients[0].call_tool(tool_call['name'], tool_call.get('input', {}))
-                    return result
-                tool_result = asyncio.run(call())
-                if is_list_tool(tool_call['name']):
-                    tool_msg = format_tool_result(tool_call['name'], tool_result)
-                    # Adiciona resultado da tool ao histórico como mensagem clara em pt-BR
-                    conversation.append({"role": "tool", "name": tool_call['name'], "content": tool_msg})
+                # print(f'[DEBUG] Tool call parsed: {tool_call}')
+                tool_result, tool_error = await call_tool_with_retries(mcp_client, tool_call['name'], tool_call.get('input', {}))
+                
+                if tool_result is not None:
+                    user_facing_msg = format_tool_result_for_user(tool_call['name'], tool_result)
+                    llm_facing_content = format_tool_result_for_llm(tool_call['name'], tool_result)
+                    
+                    conversation.append({"role": "assistant", "content": llm_response})
+                    conversation.append({"role": "tool", "name": tool_call['name'], "content": llm_facing_content})
+                    
+                    messages_for_summary = conversation.copy()
+                    if tool_call['name'] == 'buscar_veiculos':
+                        messages_for_summary.append({"role": "system", "content": "Resuma para o usuário a lista de veículos que foi encontrada e exibida. Pergunte se ele deseja mais detalhes sobre algum deles."})
+                    
+                    final_response_llm = llm.chat(messages_for_summary)
+                    final_text = extract_final_response(final_response_llm)
+                    final_text = clean_llm_response(final_text)
+                    if final_text and not (user_facing_msg and final_text in user_facing_msg):
+                        stream_print(final_text)
+                    conversation.append({"role": "assistant", "content": final_response_llm})
                 else:
-                    conversation.append({"role": "tool", "name": tool_call['name'], "content": json.dumps(tool_result)})
-                # Chama o LLM novamente para gerar resposta final
-                messages = conversation.copy()
-                final_response = llm.chat(messages)
-                final_text2 = extract_final_response(final_response)
-                final_text2 = clean_llm_response(final_text2)
-                if final_text2:
-                    stream_print(final_text2)
-                conversation.append({"role": "assistant", "content": final_response})
+                    error_message = f"Desculpe, ocorreu um erro ao tentar consultar a informação. Tente novamente."
+                    if tool_error: print(f"Motivo: {tool_error}")
+                    stream_print(error_message)
+                    conversation.append({"role": "assistant", "content": error_message})
             else:
+                # print('[DEBUG] Nenhuma chamada de ferramenta detectada!')
+                final_text = extract_final_response(llm_response)
+                final_text = clean_llm_response(final_text)
+                if final_text: stream_print(final_text)
                 conversation.append({"role": "assistant", "content": llm_response})
+
         except (KeyboardInterrupt, EOFError):
-            print_status("Exiting MCP client CLI.")
+            print_status("\nSaindo do MCP client CLI.")
             break
+        except Exception as e:
+            print_error(f"Ocorreu um erro inesperado no loop principal: {e}")
+            continue
 
 if __name__ == "__main__":
-    main() 
+    try:
+        asyncio.run(main_async())
+    except (ImportError, KeyboardInterrupt, asyncio.CancelledError):
+        print_status("Saindo do MCP client CLI.")
