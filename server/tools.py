@@ -29,7 +29,6 @@ async def buscar_veiculos(db: AsyncSession, filters: VehicleFilter) -> List[Vehi
         query = query.where(Veiculo.numero_portas == filters.doors)
     if filters.transmission:
         query = query.where(Veiculo.tipo_transmissao == filters.transmission)
-    # TODO: search_text (full-text search)
     result = await db.execute(query)
     veiculos = result.scalars().all()
     return [VehicleResult.from_orm(v) for v in veiculos]
